@@ -1,5 +1,6 @@
 // mod ieee738;
-mod ieee738_us;
+use ieee738::ieee738_us;
+
 
 fn main() {
     println!("Hello, world!");
