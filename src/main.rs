@@ -57,52 +57,49 @@ fn main() {
     let r_low: f64 = 2.20833e-05;
     let r_high: f64 = 2.63258e-05;
 
+    let conductor = ieee738_us::Conductor {
+        diameter,
+        absorptivity,
+        emissivity,
+        t_low,
+        t_high,
+        r_low,
+        r_high,
+    };
+
+    let env = ieee738_us::Environment {
+        ambient_temperature,
+        wind_speed,
+        wind_angle_deg,
+        elevation,
+    };
+
+    let solar = ieee738_us::Solar {
+        solar_radiation,
+        month,
+        day_of_month,
+        hour_of_day,
+        latitude_deg,
+        line_azimuth_deg,
+        atmosphere_clear,
+    };
+
     let rating = ieee738_us::thermal_rating(
-        solar_radiation
-        ,month
-        ,day_of_month
-        ,hour_of_day
-        ,ambient_temperature
-        ,wind_speed
-        ,wind_angle_deg
-        ,latitude_deg
-        ,line_azimuth_deg
-        ,elevation
-        ,atmosphere_clear
-        ,conductor_temperature
-        ,absorptivity
-        ,emissivity
-        ,diameter
-        ,t_low
-        ,t_high
-        ,r_low
-        ,r_high
+        &conductor,
+        &env,
+        &solar,
+        conductor_temperature,
     );
 
     println!("Thermal Rating: {}", rating);
 
     let tolerance: f64 = 0.01;
     let temperature = ieee738_us::calculated_temperature(
-        solar_radiation
-        ,month
-        ,day_of_month
-        ,hour_of_day
-        ,ambient_temperature
-        ,wind_speed
-        ,wind_angle_deg
-        ,latitude_deg
-        ,line_azimuth_deg
-        ,elevation
-        ,atmosphere_clear
-        ,rating
-        ,tolerance
-        ,absorptivity
-        ,emissivity
-        ,diameter
-        ,t_low
-        ,t_high
-        ,r_low
-        ,r_high
+        &conductor,
+        &env,
+        &solar,
+        rating,
+        tolerance,
     );
 
     println!("Temperature: {}", temperature);
@@ -113,65 +110,35 @@ fn main() {
     let steps: i32 = 1;
 
     let delta_t = ieee738_us::conductor_temperature_rise(
-        solar_radiation
-        ,month
-        ,day_of_month
-        ,hour_of_day
-        ,ambient_temperature
-        ,wind_speed
-        ,wind_angle_deg
-        ,latitude_deg
-        ,line_azimuth_deg
-        ,elevation
-        ,atmosphere_clear
-        ,conductor_temperature
-        ,final_current
-        ,time_step
-        ,steps
-        ,absorptivity
-        ,emissivity
-        ,diameter
-        ,t_low
-        ,t_high
-        ,r_low
-        ,r_high
-        ,heat_capacity
+        &conductor,
+        &env,
+        &solar,
+        conductor_temperature,
+        final_current,
+        time_step,
+        steps,
+        heat_capacity,
     );
 
     println!("Delta T: {}", delta_t);
 
     let conductor_temperature_max: f64 = 254.3;
-
     let steps: i32 = 31;
 
-    let t_rating: f64 = ieee738_us::transient_rating(
-        solar_radiation
-        ,month
-        ,day_of_month
-        ,hour_of_day
-        ,ambient_temperature
-        ,wind_speed
-        ,wind_angle_deg
-        ,latitude_deg
-        ,line_azimuth_deg
-        ,elevation
-        ,atmosphere_clear
-        ,conductor_temperature
-        ,conductor_temperature_max
-        ,time_step
-        ,steps
-        ,tolerance
-        ,absorptivity
-        ,emissivity
-        ,diameter
-        ,t_low
-        ,t_high
-        ,r_low
-        ,r_high
-        ,heat_capacity
+    let t_rating = ieee738_us::transient_rating(
+        &conductor,
+        &env,
+        &solar,
+        conductor_temperature,
+        conductor_temperature_max,
+        time_step,
+        steps,
+        tolerance,
+        heat_capacity,
     );
 
     println!("Transient Rating: {}", t_rating);
+
 
 }
 

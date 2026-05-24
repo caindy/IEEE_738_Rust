@@ -1,7 +1,92 @@
+/// Represents the physical, material, and electrical properties of a conductor.
+#[derive(Debug, Clone, Copy)]
+pub struct Conductor {
+    /// Outer diameter of the conductor (ft)
+    pub diameter: f64,
+    /// Absorptivity of the conductor (0.0 to 1.0)
+    pub absorptivity: f64,
+    /// Emissivity of the conductor (0.0 to 1.0)
+    pub emissivity: f64,
+    /// Low Temperature (C) for resistance interpolation
+    pub t_low: f64,
+    /// High Temperature (C) for resistance interpolation
+    pub t_high: f64,
+    /// Resistance at Low Temperature (Ohms / ft)
+    pub r_low: f64,
+    /// Resistance at High Temperature (Ohms / ft)
+    pub r_high: f64,
+}
+
+impl Conductor {
+    /// Returns a standard Drake ACSR (795 kcmil 26/7) conductor profile.
+    /// Uses standard diameter of 1.108 inches (0.092333 ft),
+    /// resistance of 0.0220833 Ohms/kft (2.20833e-5 Ohms/ft) at 25°C,
+    /// and 0.0263258 Ohms/kft (2.63258e-5 Ohms/ft) at 75°C.
+    pub fn drake_acsr() -> Self {
+        Self {
+            diameter: 1.108 / 12.0,
+            absorptivity: 0.8,
+            emissivity: 0.8,
+            t_low: 25.0,
+            t_high: 75.0,
+            r_low: 2.20833e-5,
+            r_high: 2.63258e-5,
+        }
+    }
+
+    /// Returns a standard Hawk ACSR (477 kcmil 26/7) conductor profile.
+    /// Uses standard diameter of 0.858 inches (0.0715 ft),
+    /// resistance of 0.036 Ohms/kft (3.6e-5 Ohms/ft) at 25°C,
+    /// and 0.044 Ohms/kft (4.4e-5 Ohms/ft) at 75°C.
+    pub fn hawk_acsr() -> Self {
+        Self {
+            diameter: 0.858 / 12.0,
+            absorptivity: 0.8,
+            emissivity: 0.8,
+            t_low: 25.0,
+            t_high: 75.0,
+            r_low: 3.6e-5,
+            r_high: 4.4e-5,
+        }
+    }
+}
+
+/// Represents the ambient weather and environmental conditions.
+#[derive(Debug, Clone, Copy)]
+pub struct Environment {
+    /// Ambient temperature (C)
+    pub ambient_temperature: f64,
+    /// Wind speed (ft/s)
+    pub wind_speed: f64,
+    /// Wind angle (Degrees, 0 to 90)
+    pub wind_angle_deg: f64,
+    /// Height of conductor above sea level (ft)
+    pub elevation: f64,
+}
+
+/// Represents the solar positioning and radiation inputs.
+#[derive(Debug, Clone, Copy)]
+pub struct Solar {
+    /// Solar radiation (W/ft^2). If < 0.0, the solar radiation is calculated.
+    pub solar_radiation: f64,
+    /// Month of the year (1-12)
+    pub month: i32,
+    /// Day of the month (1-31)
+    pub day_of_month: i32,
+    /// Hour of the day (0.0-24.0, e.g. 11.0 is 11:00 AM)
+    pub hour_of_day: f64,
+    /// Latitude (Decimal Degrees)
+    pub latitude_deg: f64,
+    /// Line azimuth (Decimal Degrees, e.g. 90.0 for E-W line)
+    pub line_azimuth_deg: f64,
+    /// Clear atmosphere (true) vs industrial (false)
+    pub atmosphere_clear: bool,
+}
 
 
 /// Returns convective_heat_loss Qc (Watts / ft)
 /// # Arguments
+
 /// * `ambient_temperature` - T_a: Degrees (C)
 /// * `wind_speed` - V_w: Wind Speed (ft/s)
 /// * `wind_angle_deg` - Wind Angle (Degrees) 0 to 90
@@ -232,58 +317,57 @@ pub fn adjust_r(
 
 /// Returns thermal_rating (Amps)
 /// # Arguments
-/// * `solar_radiation` - w/ft^2, or <0 if it should be calculated via month/day/hour
-/// * `month` - 1 (January) to 12 (December)
-/// * `day_of_month` - Day of Month (1-31)
-/// * `hour_of_day` - Hour of Day, 0 to 23 (e.g. 11:00 AM => 11)
-/// * `ambient_temperature` - T_a: Degrees (C)
-/// * `wind_speed` - V_w: Wind Speed (ft/s)
-/// * `wind_angle_deg` - Wind Angle (Degrees) 0 to 90
-/// * `latitude_deg` - Lat: Latitude (Decimal Degrees)
-/// * `line_azimuth_deg` - Z_l: If line runs E-W => 90 Degrees
-/// * `elevation` - H_e: Height of conductor above sea level (ft)
-/// * `atmosphere_clear` - Clear? (True) Industrial? (False)
+/// * `conductor` - The Conductor properties parameter object
+/// * `env` - The Environment conditions parameter object
+/// * `solar` - The Solar positioning/radiation parameter object
 /// * `conductor_temperature` - T_s: Conductor Surface Temperature (C)
-/// * `absorptivity` - α: Alpha, Absorptivity of conductor (0.0 to 1.0)
-/// * `emissivity` - ε: Epsilon, Emissivity of conductor (0.0 to 1.0)
-/// * `diameter` - D_0: Outer diameter of the conductor (ft)
-/// * `t_low` - Low Temperature, Degrees C
-/// * `t_high` - High Temperature, Degrees C
-/// * `r_low` - Resistance at Low Temperature, Ohms / ft
-/// * `r_high` - Resistance at High Temperature, Ohms / ft
 pub fn thermal_rating(
-    solar_radiation: f64,
-    month: i32,
-    day_of_month: i32,
-    hour_of_day: f64,
-    ambient_temperature: f64,
-    wind_speed: f64,
-    wind_angle_deg: f64,
-    latitude_deg: f64,
-    line_azimuth_deg: f64,
-    elevation: f64,
-    atmosphere_clear: bool,
+    conductor: &Conductor,
+    env: &Environment,
+    solar: &Solar,
     conductor_temperature: f64,
-    absorptivity: f64,
-    emissivity: f64,
-    diameter: f64,
-    t_low: f64,
-    t_high: f64,
-    r_low: f64,
-    r_high: f64,
 ) -> f64 {
 
-    if conductor_temperature < ambient_temperature {
+    if conductor_temperature < env.ambient_temperature {
         return 0.0;
     }
 
-    let qc = convective_heat_loss(ambient_temperature,wind_speed,wind_angle_deg,elevation,conductor_temperature,diameter);
+    let qc = convective_heat_loss(
+        env.ambient_temperature,
+        env.wind_speed,
+        env.wind_angle_deg,
+        env.elevation,
+        conductor_temperature,
+        conductor.diameter,
+    );
 
-    let qr = radiated_heat_loss(ambient_temperature,conductor_temperature,emissivity,diameter);
+    let qr = radiated_heat_loss(
+        env.ambient_temperature,
+        conductor_temperature,
+        conductor.emissivity,
+        conductor.diameter,
+    );
 
-    let qs: f64 = solar_heat_gain(solar_radiation,month,day_of_month,hour_of_day,latitude_deg,line_azimuth_deg,elevation,atmosphere_clear,absorptivity,diameter);
+    let qs: f64 = solar_heat_gain(
+        solar.solar_radiation,
+        solar.month,
+        solar.day_of_month,
+        solar.hour_of_day,
+        solar.latitude_deg,
+        solar.line_azimuth_deg,
+        env.elevation,
+        solar.atmosphere_clear,
+        conductor.absorptivity,
+        conductor.diameter,
+    );
 
-    let r = adjust_r(conductor_temperature,t_low,t_high,r_low,r_high);
+    let r = adjust_r(
+        conductor_temperature,
+        conductor.t_low,
+        conductor.t_high,
+        conductor.r_low,
+        conductor.r_high,
+    );
 
     if qc + qr - qs < 0.0 {
         // The ambient temperature + solar heating, has brought the conductor to a higher temperature than the specified MOT "conductor_temperature"
@@ -293,88 +377,40 @@ pub fn thermal_rating(
     ((qc + qr - qs) / r).powf(0.5)
 }
 
-
-
 /// Returns calculated_temperature (C) based on input conditions
 /// # Arguments
-/// * `solar_radiation` - w/ft^2, or <0 if it should be calculated via month/day/hour
-/// * `month` - 1 (January) to 12 (December)
-/// * `day_of_month` - Day of Month (1-31)
-/// * `hour_of_day` - Hour of Day, 0 to 23 (e.g. 11:00 AM => 11)
-/// * `ambient_temperature` - T_a: Degrees (C)
-/// * `wind_speed` - V_w: Wind Speed (ft/s)
-/// * `wind_angle_deg` - Wind Angle (Degrees) 0 to 90
-/// * `latitude_deg` - Lat: Latitude (Decimal Degrees)
-/// * `line_azimuth_deg` - Z_l: If line runs E-W => 90 Degrees
-/// * `elevation` - H_e: Height of conductor above sea level (ft)
-/// * `atmosphere_clear` - Clear? (True) Industrial? (False)
+/// * `conductor` - The Conductor properties parameter object
+/// * `env` - The Environment conditions parameter object
+/// * `solar` - The Solar positioning/radiation parameter object
 /// * `current` - Current (amps)
 /// * `tolerance` - Tolerance on result (amps)
-/// * `absorptivity` - α: Alpha, Absorptivity of conductor (0.0 to 1.0)
-/// * `emissivity` - ε: Epsilon, Emissivity of conductor (0.0 to 1.0)
-/// * `diameter` - D_0: Outer diameter of the conductor (ft)
-/// * `t_low` - Low Temperature, Degrees C
-/// * `t_high` - High Temperature, Degrees C
-/// * `r_low` - Resistance at Low Temperature, Ohms / ft
-/// * `r_high` - Resistance at High Temperature, Ohms / ft
 pub fn calculated_temperature(
-    solar_radiation: f64,
-    month: i32,
-    day_of_month: i32,
-    hour_of_day: f64,
-    ambient_temperature: f64,
-    wind_speed: f64,
-    wind_angle_deg: f64,
-    latitude_deg: f64,
-    line_azimuth_deg: f64,
-    elevation: f64,
-    atmosphere_clear: bool,
+    conductor: &Conductor,
+    env: &Environment,
+    solar: &Solar,
     current: f64,
     tolerance: f64,
-    absorptivity: f64,
-    emissivity: f64,
-    diameter: f64,
-    t_low: f64,
-    t_high: f64,
-    r_low: f64,
-    r_high: f64,
 ) -> f64 {
     if current < 0.0 {
         return 0.0;
     }
 
-    let mut lower_bound: f64 = ambient_temperature;
+    let mut lower_bound: f64 = env.ambient_temperature;
     let mut upper_bound: f64 = 256.0;
     let target_y: f64 = current;
 
     // Increase upper_bound until y(upper_bound) exceeds target_y or it becomes very large
     loop {
         let thermal_rating_retval = thermal_rating(
-            solar_radiation
-            ,month
-            ,day_of_month
-            ,hour_of_day
-            ,ambient_temperature
-            ,wind_speed
-            ,wind_angle_deg
-            ,latitude_deg
-            ,line_azimuth_deg
-            ,elevation
-            ,atmosphere_clear
-            ,upper_bound // Modified variable
-            ,absorptivity
-            ,emissivity
-            ,diameter
-            ,t_low
-            ,t_high
-            ,r_low
-            ,r_high
+            conductor,
+            env,
+            solar,
+            upper_bound,
         );
 
         if thermal_rating_retval < target_y && upper_bound < f64::MAX / 2.0 {
             upper_bound *= 2.0;
-        }
-        else {
+        } else {
             break;
         }
     }
@@ -383,25 +419,10 @@ pub fn calculated_temperature(
     while upper_bound - lower_bound > tolerance {
         let mid = (lower_bound + upper_bound) / 2.0;
         let mid_y = thermal_rating(
-            solar_radiation
-            ,month
-            ,day_of_month
-            ,hour_of_day
-            ,ambient_temperature
-            ,wind_speed
-            ,wind_angle_deg
-            ,latitude_deg
-            ,line_azimuth_deg
-            ,elevation
-            ,atmosphere_clear
-            ,mid // Modified variable
-            ,absorptivity
-            ,emissivity
-            ,diameter
-            ,t_low
-            ,t_high
-            ,r_low
-            ,r_high
+            conductor,
+            env,
+            solar,
+            mid,
         );
 
         if mid_y <= target_y {
@@ -415,69 +436,67 @@ pub fn calculated_temperature(
     (lower_bound + upper_bound) / 2.0
 }
 
-
 /// Returns conductor_temperature_rise (C)
 /// # Arguments
-/// * `solar_radiation` - w/ft^2, or <0 if it should be calculated via month/day/hour
-/// * `month` - 1 (January) to 12 (December)
-/// * `day_of_month` - Day of Month (1-31)
-/// * `hour_of_day` - Hour of Day, 0 to 23 (e.g. 11:00 AM => 11)
-/// * `ambient_temperature` - T_a: Degrees (C)
-/// * `wind_speed` - V_w: Wind Speed (ft/s)
-/// * `wind_angle_deg` - Wind Angle (Degrees) 0 to 90
-/// * `latitude_deg` - Lat: Latitude (Decimal Degrees)
-/// * `line_azimuth_deg` - Z_l: If line runs E-W => 90 Degrees
-/// * `elevation` - H_e: Height of conductor above sea level (ft)
-/// * `atmosphere_clear` - Clear? (True) Industrial? (False)
+/// * `conductor` - The Conductor properties parameter object
+/// * `env` - The Environment conditions parameter object
+/// * `solar` - The Solar positioning/radiation parameter object
 /// * `conductor_temperature` - Initial Conductor Surface Temperature (C)
 /// * `current` - Current (amps)
 /// * `time_step` - Timestep (seconds)
 /// * `steps` - Number of time steps to apply
-/// * `absorptivity` - α: Alpha, Absorptivity of conductor (0.0 to 1.0)
-/// * `emissivity` - ε: Epsilon, Emissivity of conductor (0.0 to 1.0)
-/// * `diameter` - D_0: Outer diameter of the conductor (ft)
-/// * `t_low` - Low Temperature, Degrees C
-/// * `t_high` - High Temperature, Degrees C
-/// * `r_low` - Resistance at Low Temperature, Ohms / ft
-/// * `r_high` - Resistance at High Temperature, Ohms / ft
 /// * `heat_capacity` - m*Cp: Total heat capacity of conductor (J/(ft-°C))
 pub fn conductor_temperature_rise(
-    solar_radiation: f64,
-    month: i32,
-    day_of_month: i32,
-    hour_of_day: f64,
-    ambient_temperature: f64,
-    wind_speed: f64,
-    wind_angle_deg: f64,
-    latitude_deg: f64,
-    line_azimuth_deg: f64,
-    elevation: f64,
-    atmosphere_clear: bool,
+    conductor: &Conductor,
+    env: &Environment,
+    solar: &Solar,
     conductor_temperature: f64,
     current: f64,
     time_step: f64,
     steps: i32,
-    absorptivity: f64,
-    emissivity: f64,
-    diameter: f64,
-    t_low: f64,
-    t_high: f64,
-    r_low: f64,
-    r_high: f64,
     heat_capacity: f64,
 ) -> f64 {
 
-    if conductor_temperature < ambient_temperature {
+    if conductor_temperature < env.ambient_temperature {
         return 0.0;
     }
 
     let mut final_temperature = conductor_temperature;
 
     for _ in 0..steps {
-        let qc = convective_heat_loss(ambient_temperature,wind_speed,wind_angle_deg,elevation,final_temperature,diameter);
-        let qr = radiated_heat_loss(ambient_temperature,final_temperature,emissivity,diameter);
-        let qs: f64 = solar_heat_gain(solar_radiation,month,day_of_month,hour_of_day,latitude_deg,line_azimuth_deg,elevation,atmosphere_clear,absorptivity,diameter);
-        let r = adjust_r(final_temperature,t_low,t_high,r_low,r_high);
+        let qc = convective_heat_loss(
+            env.ambient_temperature,
+            env.wind_speed,
+            env.wind_angle_deg,
+            env.elevation,
+            final_temperature,
+            conductor.diameter,
+        );
+        let qr = radiated_heat_loss(
+            env.ambient_temperature,
+            final_temperature,
+            conductor.emissivity,
+            conductor.diameter,
+        );
+        let qs: f64 = solar_heat_gain(
+            solar.solar_radiation,
+            solar.month,
+            solar.day_of_month,
+            solar.hour_of_day,
+            solar.latitude_deg,
+            solar.line_azimuth_deg,
+            env.elevation,
+            solar.atmosphere_clear,
+            conductor.absorptivity,
+            conductor.diameter,
+        );
+        let r = adjust_r(
+            final_temperature,
+            conductor.t_low,
+            conductor.t_high,
+            conductor.r_low,
+            conductor.r_high,
+        );
         let delta_t = ((r * current.powf(2.0)) + qs - qc - qr) * time_step / heat_capacity;
         final_temperature += delta_t;
     }
@@ -487,54 +506,24 @@ pub fn conductor_temperature_rise(
 
 /// Returns transient_rating (Amps)
 /// # Arguments
-/// * `solar_radiation` - w/ft^2, or <0 if it should be calculated via month/day/hour
-/// * `month` - 1 (January) to 12 (December)
-/// * `day_of_month` - Day of Month (1-31)
-/// * `hour_of_day` - Hour of Day, 0 to 23 (e.g. 11:00 AM => 11)
-/// * `ambient_temperature` - T_a: Degrees (C)
-/// * `wind_speed` - V_w: Wind Speed (ft/s)
-/// * `wind_angle_deg` - Wind Angle (Degrees) 0 to 90
-/// * `latitude_deg` - Lat: Latitude (Decimal Degrees)
-/// * `line_azimuth_deg` - Z_l: If line runs E-W => 90 Degrees
-/// * `elevation` - H_e: Height of conductor above sea level (ft)
-/// * `atmosphere_clear` - Clear? (True) Industrial? (False)
+/// * `conductor` - The Conductor properties parameter object
+/// * `env` - The Environment conditions parameter object
+/// * `solar` - The Solar positioning/radiation parameter object
 /// * `conductor_temperature` - Initial Conductor Surface Temperature (C)
 /// * `conductor_temperature_max` - Max Final Conductor Surface Temperature (C)
 /// * `time_step` - Timestep (seconds)
 /// * `steps` - Number of time steps to apply
 /// * `tolerance` - Tolerance on result (amps)
-/// * `absorptivity` - α: Alpha, Absorptivity of conductor (0.0 to 1.0)
-/// * `emissivity` - ε: Epsilon, Emissivity of conductor (0.0 to 1.0)
-/// * `diameter` - D_0: Outer diameter of the conductor (ft)
-/// * `t_low` - Low Temperature, Degrees C
-/// * `t_high` - High Temperature, Degrees C
-/// * `r_low` - Resistance at Low Temperature, Ohms / ft
-/// * `r_high` - Resistance at High Temperature, Ohms / ft
 /// * `heat_capacity` - m*Cp: Total heat capacity of conductor (J/(ft-°C))
 pub fn transient_rating(
-    solar_radiation: f64,
-    month: i32,
-    day_of_month: i32,
-    hour_of_day: f64,
-    ambient_temperature: f64,
-    wind_speed: f64,
-    wind_angle_deg: f64,
-    latitude_deg: f64,
-    line_azimuth_deg: f64,
-    elevation: f64,
-    atmosphere_clear: bool,
+    conductor: &Conductor,
+    env: &Environment,
+    solar: &Solar,
     conductor_temperature: f64,
     conductor_temperature_max: f64,
     time_step: f64,
     steps: i32,
     tolerance: f64,
-    absorptivity: f64,
-    emissivity: f64,
-    diameter: f64,
-    t_low: f64,
-    t_high: f64,
-    r_low: f64,
-    r_high: f64,
     heat_capacity: f64,
 ) -> f64 {
 
@@ -550,30 +539,15 @@ pub fn transient_rating(
 
     // Increase upper_bound until y(upper_bound) exceeds target_y or it becomes very large
     while conductor_temperature_rise(
-            solar_radiation
-            ,month
-            ,day_of_month
-            ,hour_of_day
-            ,ambient_temperature
-            ,wind_speed
-            ,wind_angle_deg
-            ,latitude_deg
-            ,line_azimuth_deg
-            ,elevation
-            ,atmosphere_clear
-            ,conductor_temperature
-            ,upper_bound // Modified variable
-            ,time_step
-            ,steps
-            ,absorptivity
-            ,emissivity
-            ,diameter
-            ,t_low
-            ,t_high
-            ,r_low
-            ,r_high
-            ,heat_capacity
-        ) < target_y && upper_bound < f64::MAX / 2.0 {
+        conductor,
+        env,
+        solar,
+        conductor_temperature,
+        upper_bound,
+        time_step,
+        steps,
+        heat_capacity,
+    ) < target_y && upper_bound < f64::MAX / 2.0 {
         upper_bound *= 2.0;
     }
 
@@ -581,29 +555,14 @@ pub fn transient_rating(
     while upper_bound - lower_bound > tolerance {
         let mid = (lower_bound + upper_bound) / 2.0;
         let mid_y = conductor_temperature_rise(
-            solar_radiation
-            ,month
-            ,day_of_month
-            ,hour_of_day
-            ,ambient_temperature
-            ,wind_speed
-            ,wind_angle_deg
-            ,latitude_deg
-            ,line_azimuth_deg
-            ,elevation
-            ,atmosphere_clear
-            ,conductor_temperature
-            ,mid // Modified variable
-            ,time_step
-            ,steps
-            ,absorptivity
-            ,emissivity
-            ,diameter
-            ,t_low
-            ,t_high
-            ,r_low
-            ,r_high
-            ,heat_capacity
+            conductor,
+            env,
+            solar,
+            conductor_temperature,
+            mid,
+            time_step,
+            steps,
+            heat_capacity,
         );
 
         if mid_y < target_y {
@@ -617,3 +576,69 @@ pub fn transient_rating(
     (lower_bound + upper_bound) / 2.0
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_drake_acsr_thermal_rating() {
+        let conductor = Conductor::drake_acsr();
+        let env = Environment {
+            ambient_temperature: 40.0,
+            wind_speed: 2.0,
+            wind_angle_deg: 90.0,
+            elevation: 0.0,
+        };
+        let solar = Solar {
+            solar_radiation: -1.0, // calculated
+            month: 6,
+            day_of_month: 10,
+            hour_of_day: 11.0,
+            latitude_deg: 30.0,
+            line_azimuth_deg: 90.0,
+            atmosphere_clear: true,
+        };
+
+        // Calculate thermal rating at max operating temperature (MOT) of 100°C
+        let rating = thermal_rating(&conductor, &env, &solar, 100.0);
+        
+        // Under these conditions (standard solar, 40°C ambient, 2 ft/s crosswind, MOT 100°C),
+        // the Drake rating should be positive and roughly around 800 - 1100 Amps.
+        assert!(rating > 0.0);
+        assert!(rating > 800.0 && rating < 1100.0, "Drake rating: {}", rating);
+        
+        // Verify calculated_temperature returns 100°C given the thermal rating
+        let temp = calculated_temperature(&conductor, &env, &solar, rating, 0.01);
+        assert!((temp - 100.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_hawk_acsr_thermal_rating() {
+        let conductor = Conductor::hawk_acsr();
+        let env = Environment {
+            ambient_temperature: 25.0,
+            wind_speed: 2.0,
+            wind_angle_deg: 90.0,
+            elevation: 0.0,
+        };
+        let solar = Solar {
+            solar_radiation: 1000.0, // explicit solar radiation
+            month: 1,
+            day_of_month: 1,
+            hour_of_day: 12.0,
+            latitude_deg: 0.0,
+            line_azimuth_deg: 0.0,
+            atmosphere_clear: true,
+        };
+
+        // Hawk has smaller diameter and higher resistance than Drake.
+        // Therefore, it should have a lower thermal rating under similar conditions.
+        let drake = Conductor::drake_acsr();
+        
+        let hawk_rating = thermal_rating(&conductor, &env, &solar, 75.0);
+        let drake_rating = thermal_rating(&drake, &env, &solar, 75.0);
+        
+        assert!(hawk_rating > 0.0);
+        assert!(drake_rating > hawk_rating, "Drake rating ({}) should be higher than Hawk rating ({}) due to larger diameter & lower resistance", drake_rating, hawk_rating);
+    }
+}
